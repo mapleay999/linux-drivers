@@ -43,11 +43,6 @@
 				 &gpioh 7 GPIO_ACTIVE_LOW>; /* KEY1:PH7 */
 	    
 	};
-	
-	maple_led {
-	    compatible = "Mapleay-MP157d-led";
-	    led-gpios = <&gpioi 0 GPIO_ACTIVE_LOW>;
-	};
 };
 
 &cpu1{
