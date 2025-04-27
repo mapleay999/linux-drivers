@@ -292,9 +292,9 @@ static irqreturn_t gpio_key_isr(int irq, void *dev_id)
 {
     struct gpio_pin_t *key = dev_id;
 
-	// 打印中断触发信息
+    // 打印中断触发信息
     printk(KERN_DEBUG "中断触发! IRQ=%d, GPIO=%d, 时间戳=%llu\n", irq, key->gpio, ktime_get_ns());
-		
+        
     // 立即禁用中断防止抖动
     disable_irq_nosync(irq);
     
@@ -349,27 +349,27 @@ static int pltfrm_driver_probe(struct platform_device *pdev)
     struct device_node *node = pdev->dev.of_node; /* 便于阅读分析代码 */
     struct device *dev = &pdev->dev;              /* 便于阅读分析代码 */
     enum of_gpio_flags flag;
-	char *input_name = NULL;
+    char *input_name = NULL;
 
-	/* 第一部分：按键中断的实现 */
+    /* 第一部分：按键中断的实现 */
     /* 1. 从设备树上获取特定compatible-ID的"mkey-gpios"属性硬件gpio数量 
-	**    of_gpio_named_count 函数是精确查找，必须使用属性键全名，"mkey-gpios"
-	**    不能使用 "mkey" 否则查不到！
-	*/
+    **    of_gpio_named_count 函数是精确查找，必须使用属性键全名，"mkey-gpios"
+    **    不能使用 "mkey" 否则查不到！
+    */
     count = of_gpio_named_count(node, "mkey-gpios");
     if (count < 0) {
         dev_err(dev, "设备树中缺失有效 mkey-gpio 信息！");
         return -EINVAL;
     }
-	printk("成功解析出: %d 个按键gpio信息\n", count);
+    printk("成功解析出: %d 个按键gpio信息\n", count);
 
     /* 2. 申请自定义驱动对象(struct gpio_key类型)所需的存储空间 */
     chrdev.gpio_keys = devm_kzalloc(dev, sizeof(struct gpio_pin_t)*count, GFP_KERNEL);
-	if (!chrdev.gpio_keys) {
-    	dev_err(dev, "无法分配 GPIO 按键内存，请求大小: %zu bytes\n", 
-            	sizeof(struct gpio_pin_t) * count);
-    	return -ENOMEM;
-	}
+    if (!chrdev.gpio_keys) {
+        dev_err(dev, "无法分配 GPIO 按键内存，请求大小: %zu bytes\n", 
+                sizeof(struct gpio_pin_t) * count);
+        return -ENOMEM;
+    }
     
     /*
     ** 分两部分：3.是纯粹为按键设置中断；A.是将按键注入到输入子系统内；
@@ -383,12 +383,12 @@ static int pltfrm_driver_probe(struct platform_device *pdev)
         **     但是，当设备树节点内含多个其他类别的键值对，比如下面的 led-gpio ，就解析失败！
         **     原因暂时无法确定，但是，我修改成of_get_named_gpio_flags版本，使用全名键
         **     字符串 "mkey-gpios" ，就可以正常识别。
-		*/
+        */
         chrdev.gpio_keys[i].gpio  = of_get_named_gpio_flags(node, "mkey-gpios", i, &flag);
-		if (chrdev.gpio_keys[i].gpio < 0) {
-			dev_err(dev, "无法获取 GPIO %d, 错误码: %d\n", i, chrdev.gpio_keys[i].gpio);
-    		return -EINVAL;
-		}
+        if (chrdev.gpio_keys[i].gpio < 0) {
+            dev_err(dev, "无法获取 GPIO %d, 错误码: %d\n", i, chrdev.gpio_keys[i].gpio);
+            return -EINVAL;
+        }
 
         /* 3.2 devm_gpiod_get_index 获取 GPIO 的描述符，也可称为句柄。
         **    函数的第二个参数：
@@ -421,49 +421,49 @@ static int pltfrm_driver_probe(struct platform_device *pdev)
             printk(KERN_ERR"注册中断失败！");
         }
 
-		/* A. 为俩keys按键，新增输入子系统特性。附加timer防抖。*/
-		// A.1 初始化定时器
-		timer_setup(&chrdev.gpio_keys[i].debounce_timer, debounce_timer_handler, 0);
-		
+        /* A. 为俩keys按键，新增输入子系统特性。附加timer防抖。*/
+        // A.1 初始化定时器
+        timer_setup(&chrdev.gpio_keys[i].debounce_timer, debounce_timer_handler, 0);
+        
         /* 将两个按键 keys 注入到linux input子系统内 */
-		// A.2 allocate memory for new input device
-		chrdev.gpio_keys[i].input_dev = input_allocate_device(); 
-		if (!chrdev.gpio_keys[i].input_dev) {
-		    dev_err(dev, "无法分配输入设备%d\n", i);
-		    return -ENOMEM;
-		}
+        // A.2 allocate memory for new input device
+        chrdev.gpio_keys[i].input_dev = input_allocate_device(); 
+        if (!chrdev.gpio_keys[i].input_dev) {
+            dev_err(dev, "无法分配输入设备%d\n", i);
+            return -ENOMEM;
+        }
 
-		// A.3 分配设备名称（必须唯一）
-	    input_name = devm_kasprintf(dev, GFP_KERNEL, "Mapleay-Key-%d", i);
-	    if (!input_name) {
-	        dev_err(dev, "无法分配输入设备%d名称\n", i);
-	        input_free_device(chrdev.gpio_keys[i].input_dev);
-	        return -ENOMEM;
-	    }
-	    chrdev.gpio_keys[i].input_dev->name = input_name;
+        // A.3 分配设备名称（必须唯一）
+        input_name = devm_kasprintf(dev, GFP_KERNEL, "Mapleay-Key-%d", i);
+        if (!input_name) {
+            dev_err(dev, "无法分配输入设备%d名称\n", i);
+            input_free_device(chrdev.gpio_keys[i].input_dev);
+            return -ENOMEM;
+        }
+        chrdev.gpio_keys[i].input_dev->name = input_name;
 
-		// A.4 注册前设置能力 mark device as capable of a certain event
-		input_set_capability(chrdev.gpio_keys[i].input_dev, EV_KEY, KEY_POWER); 
+        // A.4 注册前设置能力 mark device as capable of a certain event
+        input_set_capability(chrdev.gpio_keys[i].input_dev, EV_KEY, KEY_POWER); 
 
-		// A.5 注册设备 register device into input core
-		if (input_register_device(chrdev.gpio_keys[i].input_dev)) { 
-			input_free_device(chrdev.gpio_keys[i].input_dev);
-    		chrdev.gpio_keys[i].input_dev = NULL; // 标记已清理
-    		dev_err(dev, "注册输入设备%d失败\n", i);
-			
-    		while (--i >= 0) { // 回滚之前已注册的设备
-        		input_unregister_device(chrdev.gpio_keys[i].input_dev);
-    		}
-    		return -ENODEV;
-		} else {
-        	printk(KERN_DEBUG "成功注册输入设备: %s (GPIO%d)\n",
-        	chrdev.gpio_keys[i].input_dev->name,
-        	chrdev.gpio_keys[i].gpio);
-    	}
+        // A.5 注册设备 register device into input core
+        if (input_register_device(chrdev.gpio_keys[i].input_dev)) { 
+            input_free_device(chrdev.gpio_keys[i].input_dev);
+            chrdev.gpio_keys[i].input_dev = NULL; // 标记已清理
+            dev_err(dev, "注册输入设备%d失败\n", i);
+            
+            while (--i >= 0) { // 回滚之前已注册的设备
+                input_unregister_device(chrdev.gpio_keys[i].input_dev);
+            }
+            return -ENODEV;
+        } else {
+            printk(KERN_DEBUG "成功注册输入设备: %s (GPIO%d)\n",
+            chrdev.gpio_keys[i].input_dev->name,
+            chrdev.gpio_keys[i].gpio);
+        }
     }
 
 
-	/* 第二部分：同时实现字符设备驱动控制LED小灯亮灭 */
+    /* 第二部分：同时实现字符设备驱动控制LED小灯亮灭 */
     /* 4. 注册字符设备（非必须） ：考虑如何继续注册字符驱动。
     **    字符设备跟上面的按键中断是绝对独立的俩部分，除非有意关联。
     **    如何刻意关联：
@@ -475,15 +475,15 @@ static int pltfrm_driver_probe(struct platform_device *pdev)
         dev_err(dev, "无法为LED GPIO分配内存\n");
         return -ENOMEM;
     }
-	
+    
     /* 获取 LED GPIO */
     chrdev.gpio_leds->gpiod = devm_gpiod_get(dev, "mled", GPIOD_OUT_LOW);
     if (IS_ERR(chrdev.gpio_leds->gpiod)) {
         dev_err(dev, "获取硬件LED引脚信息失败！\n");
         return PTR_ERR(chrdev.gpio_leds->gpiod);
     }
-	
-	/* 注册字符驱动 */
+    
+    /* 注册字符驱动 */
     if(chrdev_init()){
         return -ENODEV;
     }
@@ -494,18 +494,18 @@ static int pltfrm_driver_probe(struct platform_device *pdev)
 static int pltfrm_driver_remove(struct platform_device *pdev)
 {
     int i = 0;
-	int count = 0;
-	struct device_node *node = pdev->dev.of_node;
+    int count = 0;
+    struct device_node *node = pdev->dev.of_node;
 
-	/* 清理输入设备与定时器 */
-	count = of_gpio_named_count(node, "mkey-gpios");
+    /* 清理输入设备与定时器 */
+    count = of_gpio_named_count(node, "mkey-gpios");
     for (i = 0; i < count; i++) { // 需要获取实际的按键数量
         if (chrdev.gpio_keys[i].input_dev) {
             input_unregister_device(chrdev.gpio_keys[i].input_dev);
         }
         del_timer_sync(&chrdev.gpio_keys[i].debounce_timer);
     }
-	
+    
     /* 注销字符设备资源 */
     chrdev_exit();
     
