@@ -476,7 +476,7 @@ static int pltfrm_driver_probe(struct platform_device *pdev)
         return -ENOMEM;
     }
 	
-    // 获取 LED GPIO
+    /* 获取 LED GPIO */
     chrdev.gpio_leds->gpiod = devm_gpiod_get(dev, "mled", GPIOD_OUT_LOW);
     if (IS_ERR(chrdev.gpio_leds->gpiod)) {
         dev_err(dev, "获取硬件LED引脚信息失败！\n");
