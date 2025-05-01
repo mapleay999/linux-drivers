@@ -3,11 +3,61 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <linux/input.h>
+#include <poll.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include "chrdev_ioctl.h"
 
 #define DEVICE_FILE "/dev/mapleay-chrdev-device"
 #define MAX_INPUT_LEN 128
+
+/* 按键中断输入子系统的测试，引入：只引入一个按键0 开始 */ 
+#define KEY_EVENT_DEV "/dev/input/event0"
+static int key_fd = -1;
+
+// 新增初始化函数
+int init_key_monitor(void) {
+    key_fd = open(KEY_EVENT_DEV, O_RDONLY | O_NONBLOCK);
+    if (key_fd < 0) {
+        perror("无法打开输入设备");
+        return -1;
+    }
+    return 0;
+}
+
+// 新增按键检测线程函数
+void* key_monitor_thread(void* arg) {
+    struct input_event ev;
+    struct pollfd fds[2] = {
+        { .fd = STDIN_FILENO, .events = POLLIN },
+        { .fd = key_fd, .events = POLLIN }
+    };
+
+    while (1) {
+        int ret = poll(fds, 2, -1); // 阻塞等待事件
+        if (ret < 0) {
+            perror("poll错误");
+            break;
+        }
+
+        // 处理按键事件
+        if (fds[1].revents & POLLIN) {
+            if (read(key_fd, &ev, sizeof(ev)) == sizeof(ev)) {
+                if (ev.type == EV_KEY && ev.code == KEY_POWER) {
+                    if (ev.value) { // 按下事件
+                        printf("\n检测到电源键按下，触发特殊操作！\n");
+                        // 这里可以添加自定义操作，例如：
+                        system("echo 按键触发 > /tmp/key.log");
+                        printf(">> "); fflush(stdout);
+                    }
+                }
+            }
+        }
+    }
+    return NULL;
+}
+/* 按键中断输入子系统的测试，引入：只引入一个按键0 结束 */ 
 
 void print_usage() {
     printf("\n支持的命令：\n");
@@ -39,6 +89,15 @@ int main() {
 
     printf("测试应用程序已启动（输入 help 显示帮助）：\n");
     printf(">> ");
+
+    /* initialization for interrupt and input test */
+    if (init_key_monitor() < 0) {
+        fprintf(stderr, "按键监测初始化失败，仅保留命令行功能\n");
+    } else {
+        pthread_t tid;
+        pthread_create(&tid, NULL, key_monitor_thread, NULL);
+        pthread_detach(tid);
+    }
 
     while (1) {
         // 读取用户输入

@@ -4,8 +4,10 @@ CURRENT_PATH := $(shell pwd)
 TARGET_PATH  := /home/ericedward/linux_space/tools/nfs/rootfs/home/maple/linux_driver/chrdev/01_chrdev/
 WORKING_PATH := /home/ericedward/linux_space/linux_driver/chrdev/01_chrdev
 
+
 obj-m += chrdev_platfrom_driver.o
 ccflags-y += -I$(WORKING_PATH)/include
+LDFLAGS += -pthread
 
 all:
 	$(MAKE) -C $(KDIR) M=$(CURRENT_PATH) modules
@@ -15,7 +17,7 @@ clean:
 	rm -f **.out **.a  # 正在删除应用程序的编译产出文件……
 
 testapp:testapp.c
-	arm-none-linux-gnueabihf-gcc -I$(WORKING_PATH)/include $(WORKING_PATH)/testapp.c -o $(WORKING_PATH)/testapp.out
+	arm-none-linux-gnueabihf-gcc -I$(WORKING_PATH)/include $(WORKING_PATH)/testapp.c -o $(WORKING_PATH)/testapp.out -pthread
 
 deploy:
 	sudo cp $(CURRENT_PATH)/**.ko  $(TARGET_PATH)

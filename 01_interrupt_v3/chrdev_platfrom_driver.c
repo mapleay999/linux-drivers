@@ -287,12 +287,11 @@ static void chrdev_exit(void) {
     printk(KERN_INFO"字符设备驱动:已卸载！\r\n");
 }
 
-// 顶半部中断处理
+// 顶半部中断ISR
 static irqreturn_t gpio_key_isr(int irq, void *dev_id)
 {
     struct gpio_pin_t *key = dev_id;
 
-    // 打印中断触发信息
     printk(KERN_DEBUG "中断触发! IRQ=%d, GPIO=%d, 时间戳=%llu\n", irq, key->gpio, ktime_get_ns());
         
     // 立即禁用中断防止抖动
@@ -304,20 +303,16 @@ static irqreturn_t gpio_key_isr(int irq, void *dev_id)
     return IRQ_HANDLED;
 }
 
-// 祛除抖动算法的定时器回调函数
+// 底半部中断ISR：祛除抖动算法的定时器回调函数
 static void debounce_timer_handler(struct timer_list *t)
 {
     struct gpio_pin_t *key = from_timer(key, t, debounce_timer);
     int val = gpiod_get_value_cansleep(key->gpiod);
 
-    // 打印防抖检测结果
-    printk(KERN_DEBUG "防抖检测: GPIO=%d, 电平=%d, 状态稳定=%s\n",
-          key->gpio,
-          val,
+    printk(KERN_DEBUG "防抖检测: GPIO=%d, 电平=%d, 状态稳定=%s\n",key->gpio,val,
           (val == gpiod_get_value_cansleep(key->gpiod)) ? "是" : "否");
 
     if (val == gpiod_get_value_cansleep(key->gpiod)) {
-        // 打印事件上报详情
         printk(KERN_DEBUG "上报事件: 设备=%s, 键值=KEY_POWER, 状态=%s\n",
               key->input_dev->name,
               val ? "按下" : "释放");
@@ -359,7 +354,7 @@ static int pltfrm_driver_probe(struct platform_device *pdev)
         chrdev.gpio_keys = gpio_keys; 
     }
 
-    for(i =0; i < count; i++){ 
+    for(i =0; i < count; i++){
 
         gpio_keys[i].gpio  = of_get_named_gpio_flags(node, "mkey-gpios", i, &flag);
         if (gpio_keys[i].gpio < 0) {
@@ -427,8 +422,7 @@ static int pltfrm_driver_probe(struct platform_device *pdev)
         }
     }
 
-
-    /* 4. 注册字符设备（非必须）*/
+    /* 4. 注册字符设备（非必须）：控制LED小灯 */
     chrdev.gpio_leds = devm_kzalloc(dev, sizeof(struct gpio_pin_t), GFP_KERNEL);
     if (!chrdev.gpio_leds) {
         dev_err(dev, "无法为LED GPIO分配内存\n");
